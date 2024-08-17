@@ -1,0 +1,148 @@
+/* Reset and base styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Arial', sans-serif;
+}
+
+body {
+    background-color: #f7f8fc;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* Container setup */
+.container {
+    flex-grow: 1;
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+}
+
+/* Main content */
+.main-content {
+    width: 100%;
+    max-width: 1200px;
+    padding: 20px;
+    background-color: #f7f8fc;
+}
+
+.main-header {
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.main-header h1 {
+    font-size: 24px;
+    color: #333;
+}
+
+.checkin-section {
+    background-color: #fff;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+}
+
+.select-room {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.select-room label {
+    font-size: 16px;
+    margin-right: 10px;
+}
+
+.select-room select {
+    padding: 10px 20px; /* Increase padding for a larger clickable area */
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 16px; /* Match the font size of the button */
+    height: 40px; /* Ensure the height matches the button */
+    margin-right: 10px;
+    cursor: pointer; /* Add pointer cursor for consistency */
+    box-sizing: border-box; /* Ensure padding doesn’t affect width */
+}
+
+.select-room button {
+    padding: 10px 20px;
+    background-color: #007bff; /* Blue color for the button */
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    height: 40px; /* Set height to match the dropdown */
+    transition: background-color 0.3s ease;
+}
+
+.select-room button:hover {
+    background-color: #0056b3; /* Darker blue on hover */
+}
+
+.current-time {
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 16px;
+    color: #666;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    text-align: left;
+    padding: 12px;
+    border-bottom: 1px solid #ddd;
+}
+
+th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+}
+
+td {
+    background-color: #fff;
+}
+
+.call-button {
+    background-color: #007bff; /* Blue color for the call button */
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+.call-button:disabled {
+    background-color: #ccc;
+}
+
+.delete-button {
+    background-color: #f44336;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+.delete-button:hover {
+    background-color: #e41f1f;
+}
+
+/* Footer */
+.footer {
+    text-align: center;
+    padding: 10px 0;
+    background-color: #f7f8fc;
+    color: #333;
+}

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Check-In Calls Monitor</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="main-header">
+                <h1>OZO Antares Check-In Call Monitor</h1>
+            </header>
+
+            <section class="checkin-section">
+                <div class="select-room">
+                    <label for="roomSelect">Select Room:</label>
+                    <select id="roomSelect">
+                        <!-- Options will be dynamically added here -->
+                    </select>
+                    <button id="checkInButton">Check In</button>
+                </div>
+                <div class="current-time">
+                    <span id="currentDay"></span>
+                    <span id="currentDate"></span>
+                </div>
+                <table id="checkin-table">
+                    <thead>
+                        <tr>
+                            <th>Room Number</th>
+                            <th>Check-In Time</th>
+                            <th>Countdown</th>
+                            <th>Action</th>
+                            <th>Comments</th>
+                            <th>Called By</th>
+                            <th>Solved?</th>
+                            <th>Delete</th>
+                        </tr>
+                    </thead>
+                    <tbody id="checkin-tbody">
+                        <!-- Rows will be dynamically added here -->
+                    </tbody>
+                </table>
+            </section>
+        </main>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>Created by Sudi</p>
+    </footer>
+
+    <script src="scripts.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.2/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+
+    <audio id="alertSound" src="./alert.wav" preload="auto"></audio>
+</body>
+</html>
