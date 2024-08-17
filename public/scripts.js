@@ -49,21 +49,15 @@ document.addEventListener('DOMContentLoaded', () => {
         currentDateElem.textContent = now.toLocaleDateString('en-GB');
     };
 
-    // Function to load check-in data from the server
     const loadCheckInData = async () => {
         try {
             const response = await fetch('/api/checkins');
             const data = await response.json();
             data.forEach(row => {
-                const checkInTime = new Date(row.checkInTime);
-                if (isNaN(checkInTime)) {
-                    console.error('Invalid Date:', row.checkInTime);
-                    return;
-                }
                 addTableRow(
                     row.room,
-                    checkInTime, // Ensure the date is correctly formatted
-                    row.id,
+                    new Date(row.checkInTime),
+                    row._id,
                     row.comments,
                     row.calledBy,
                     row.solvedStatus // Pass solvedStatus to addTableRow
@@ -73,45 +67,24 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error loading check-in data:', err);
         }
     };
+    
 
+    // Function to save check-in data to the server
     const addCheckIn = async (room, checkInTime) => {
         try {
-            // Format the check-in time to ISO format
-            const formattedCheckInTime = new Date(checkInTime).toISOString();
-    
-            // Send the check-in data to the server
             const response = await fetch('/api/checkins', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ room, checkInTime: formattedCheckInTime })
+                body: JSON.stringify({ room, checkInTime })
             });
-    
-            // Handle server errors
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Server responded with ${response.status}: ${errorText}`);
-            }
-    
-            // Parse the response JSON
             const data = await response.json();
-    
-            // Validate the received check-in time
-            const checkInTimeFromServer = new Date(data.checkInTime);
-            if (isNaN(checkInTimeFromServer.getTime())) {
-                throw new Error(`Invalid Date returned from server: ${data.checkInTime}`);
-            }
-    
-            // Add the row to the table
-            addTableRow(room, checkInTimeFromServer, data.id); // Ensure 'data.id' is used if that is correct
-    
+            addTableRow(room, new Date(data.checkInTime), data._id);
         } catch (err) {
             console.error('Error adding check-in:', err);
         }
     };
-    
-
 
     // Function to delete check-in data from the server
     const deleteCheckIn = async (id, row) => {
@@ -136,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             console.error('Error updating solved status:', err);
         }
-    };
+    };  
 
     const addTableRow = (room, checkInTime, id, comments = '', calledBy = '', solvedStatus = '') => {
         const row = document.createElement('tr');
@@ -148,7 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const calledByCell = document.createElement('td');
         const solvedCell = document.createElement('td'); // New cell for "Solved?" column
         const deleteCell = document.createElement('td');
-
+    
         roomNumberCell.textContent = room;
         checkInTimeCell.textContent = checkInTime.toLocaleTimeString('en-GB', {
             hour: '2-digit',
@@ -157,19 +130,19 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         checkInTimeCell.setAttribute('data-time', checkInTime.toISOString());
         countdownCell.textContent = 'Calculating...';
-
+    
         const callButton = document.createElement('button');
         callButton.className = 'call-button';
         callButton.textContent = 'Call';
         callButton.disabled = true;
-
+    
         const deleteButton = document.createElement('button');
         deleteButton.className = 'delete-button';
         deleteButton.textContent = 'X';
-
+    
         actionCell.appendChild(callButton);
         deleteCell.appendChild(deleteButton);
-
+    
         row.appendChild(roomNumberCell);
         row.appendChild(checkInTimeCell);
         row.appendChild(countdownCell);
@@ -178,41 +151,41 @@ document.addEventListener('DOMContentLoaded', () => {
         row.appendChild(calledByCell);
         row.appendChild(solvedCell); // Append the new "Solved?" column
         row.appendChild(deleteCell);
-
+    
         tbody.appendChild(row);
-
+    
         checkedInRooms.add(room);
-
+    
         if (comments) {
             commentsCell.textContent = comments;
             commentsCell.style.color = comments.includes('Complain') || comments.includes('Not picked up') ? 'red' : 'green';
-
+    
             // If there's a complaint, add a dropdown for "Solved?" status
             if (comments.includes('Complain')) {
                 const solvedDropdown = document.createElement('select');
-
+    
                 const optionSelect = document.createElement('option');
                 optionSelect.value = '';
                 optionSelect.textContent = 'Select';
                 optionSelect.disabled = true;
                 optionSelect.selected = !solvedStatus; // Default to "Select" if no status
-
+    
                 const optionSolved = document.createElement('option');
                 optionSolved.value = 'Solved';
                 optionSolved.textContent = 'Solved';
                 if (solvedStatus === 'Solved') optionSolved.selected = true;
-
+    
                 const optionNotSolved = document.createElement('option');
                 optionNotSolved.value = 'Not Solved';
                 optionNotSolved.textContent = 'Not Solved';
                 if (solvedStatus === 'Not Solved') optionNotSolved.selected = true;
-
+    
                 solvedDropdown.appendChild(optionSelect);
                 solvedDropdown.appendChild(optionSolved);
                 solvedDropdown.appendChild(optionNotSolved);
-
+    
                 solvedCell.appendChild(solvedDropdown);
-
+    
                 // Save the solved status to the server when changed
                 solvedDropdown.addEventListener('change', () => {
                     const newSolvedStatus = solvedDropdown.value;
@@ -220,15 +193,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         }
-
+    
         if (calledBy) {
             calledByCell.textContent = calledBy;
         }
-
+    
         // Countdown logic
         const interval = setInterval(() => {
             const now = new Date();
-            const diff = 10 * 60 * 1000 - (now - checkInTime); // 10 minutes in milliseconds
+            const diff = 10 * 60 * 1000 - (now - checkInTime); // 1 minute in milliseconds for testing
             if (diff <= 0) {
                 clearInterval(interval);
                 countdownCell.textContent = '00:00';
@@ -236,99 +209,319 @@ document.addEventListener('DOMContentLoaded', () => {
                     callButton.disabled = false;
                 }
             } else {
-                const minutes = Math.floor(diff / 60000);
-                const seconds = Math.floor((diff % 60000) / 1000);
+                const minutes = Math.floor(diff / 1000 / 60);
+                const seconds = Math.floor((diff / 1000) % 60);
                 countdownCell.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
             }
         }, 1000);
-
-        // Event listener for the call button
+    
         callButton.addEventListener('click', () => {
-            const calledBy = names[Math.floor(Math.random() * names.length)];
-            calledByCell.textContent = calledBy;
-            callButton.disabled = true;
-            updateCheckIn(id, { calledBy });
+            if (callButton.disabled) {
+                alert("You have called this room!");
+            } else {
+                showCountdownPopup(5, "Please call the room now!", () => {
+                    handlePickup(id, commentsCell, calledByCell, callButton);
+                });
+            }
         });
-
-        // Event listener for the delete button
+    
         deleteButton.addEventListener('click', () => {
+            clearInterval(interval);
             deleteCheckIn(id, row);
         });
     };
-
-    // Function to update check-in data on the server
-    const updateCheckIn = async (id, updates) => {
+    
+ 
+    const updateCommentsAndCalledBy = async (id, comments, calledBy) => {
         try {
             await fetch(`/api/checkins/${id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(updates),
+                body: JSON.stringify({ comments, calledBy }),
             });
         } catch (err) {
-            console.error('Error updating check-in:', err);
+            console.error('Error updating comments and calledBy:', err);
         }
     };
 
-    // Initialize the page
-    updateCurrentDayAndDate();
-    loadCheckInData();
+    const showCountdownPopup = (seconds, message, callback) => {
+        let remainingSeconds = seconds;
+        const countdownPopup = document.createElement('div');
+        countdownPopup.style.position = 'fixed';
+        countdownPopup.style.left = '50%';
+        countdownPopup.style.top = '50%';
+        countdownPopup.style.transform = 'translate(-50%, -50%)';
+        countdownPopup.style.backgroundColor = 'white';
+        countdownPopup.style.padding = '60px'; // Increased padding for bigger size
+        countdownPopup.style.boxShadow = '0px 0px 10px rgba(0, 0, 0, 0.1)';
+        countdownPopup.style.textAlign = 'center';
+        countdownPopup.style.zIndex = '1000';
+        countdownPopup.style.fontSize = '24px'; // Increase font size
 
-    // Initialize Howl object for your alert sound
-    const alertSound = new Howl({
-        src: ['./alert.wav'], // Your sound file path
-        preload: true
-    });
+        const messageElem = document.createElement('p');
+        messageElem.textContent = `${message}`;
+        countdownPopup.appendChild(messageElem);
 
-    // Check-in button click event
-    checkInButton.addEventListener('click', () => {
-        const selectedRoom = roomSelect.value;
+        const countdownElem = document.createElement('p');
+        countdownElem.textContent = `Continuing in ${remainingSeconds} seconds...`;
+        countdownPopup.appendChild(countdownElem);
 
-        if (checkedInRooms.has(selectedRoom)) {
-            alert(`Room ${selectedRoom} is already checked in.`);
-            return;
-        }
+        document.body.appendChild(countdownPopup);
 
-        const checkInTime = getAmsterdamTime(); // Use the function to get the current time
-        addCheckIn(selectedRoom, checkInTime);
+        const countdownInterval = setInterval(() => {
+            remainingSeconds -= 1;
+            countdownElem.textContent = `Continuing in ${remainingSeconds} seconds...`;
+            if (remainingSeconds <= 0) {
+                clearInterval(countdownInterval);
+                document.body.removeChild(countdownPopup);
+                callback();
+            }
+        }, 1000);
+    };
 
-        // Set timer for remaining time until sound should play
-        setTimeout(() => {
-            alertSound.play(); // Play sound using Howler.js
-        }, 600000); // 10 minutes in milliseconds
-    });
+    const showYesNoPopup = (message, callback) => {
+        const popup = document.createElement('div');
+        popup.style.position = 'fixed';
+        popup.style.left = '50%';
+        popup.style.top = '50%';
+        popup.style.transform = 'translate(-50%, -50%)';
+        popup.style.backgroundColor = 'white';
+        popup.style.padding = '60px'; // Increased padding for bigger size
+        popup.style.boxShadow = '0px 0px 10px rgba(0, 0, 0, 0.1)';
+        popup.style.textAlign = 'center';
+        popup.style.zIndex = '1000';
+        popup.style.fontSize = '24px'; // Increase font size
 
-    // Real-time updates with Socket.io
-    const socket = io();
-    socket.on('checkIns', (checkIns) => {
-        tbody.innerHTML = ''; // Clear the table body
-        checkedInRooms.clear(); // Clear the set of checked-in rooms
-        checkIns.forEach(row => {
-            addTableRow(
-                row.room,
-                new Date(row.checkInTime),
-                row.id,
-                row.comments,
-                row.calledBy,
-                row.solvedStatus // Pass solvedStatus to addTableRow
-            );
+        const messageElem = document.createElement('p');
+        messageElem.textContent = message;
+        popup.appendChild(messageElem);
+
+        const buttonYes = document.createElement('button');
+        buttonYes.textContent = 'Yes';
+        buttonYes.style.marginRight = '20px'; // Adjust margin for larger buttons
+        buttonYes.style.padding = '10px 20px'; // Increase button size
+        buttonYes.style.fontSize = '20px'; // Increase font size for button text
+        buttonYes.style.backgroundColor = 'blue'; // Blue button color
+        buttonYes.style.color = 'white'; // White text color
+        buttonYes.style.border = 'none';
+        buttonYes.style.cursor = 'pointer';
+        buttonYes.addEventListener('click', () => {
+            document.body.removeChild(popup);
+            callback(true);
         });
-    });
+        popup.appendChild(buttonYes);
+
+        const buttonNo = document.createElement('button');
+        buttonNo.textContent = 'No';
+        buttonNo.style.padding = '10px 20px'; // Increase button size
+        buttonNo.style.fontSize = '20px'; // Increase font size for button text
+        buttonNo.style.backgroundColor = 'blue'; // Blue button color
+        buttonNo.style.color = 'white'; // White text color
+        buttonNo.style.border = 'none';
+        buttonNo.style.cursor = 'pointer';
+        buttonNo.addEventListener('click', () => {
+            document.body.removeChild(popup);
+            callback(false);
+        });
+        popup.appendChild(buttonNo);
+
+        document.body.appendChild(popup);
+    };
+
+    const showNameSelectionPopup = (message, names, callback) => {
+        const popup = document.createElement('div');
+        popup.style.position = 'fixed';
+        popup.style.left = '50%';
+        popup.style.top = '50%';
+        popup.style.transform = 'translate(-50%, -50%)';
+        popup.style.backgroundColor = 'white';
+        popup.style.padding = '60px';
+        popup.style.boxShadow = '0px 0px 10px rgba(0, 0, 0, 0.1)';
+        popup.style.textAlign = 'center';
+        popup.style.zIndex = '1000';
+        popup.style.fontSize = '24px';
+    
+        const messageElem = document.createElement('p');
+        messageElem.textContent = message;
+        popup.appendChild(messageElem);
+    
+        const formElem = document.createElement('form');
+        formElem.style.textAlign = 'left';
+    
+        names.forEach(name => {
+            const label = document.createElement('label');
+            label.style.display = 'block';
+            label.style.fontSize = '20px';
+            
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'name';
+            radio.value = name;
+            radio.style.marginRight = '10px';
+            
+            label.appendChild(radio);
+            label.appendChild(document.createTextNode(name));
+            formElem.appendChild(label);
+        });
+    
+        // Add the "Other" option with a text input
+        const otherLabel = document.createElement('label');
+        otherLabel.style.display = 'block';
+        otherLabel.style.fontSize = '20px';
+    
+        const otherRadio = document.createElement('input');
+        otherRadio.type = 'radio';
+        otherRadio.name = 'name';
+        otherRadio.value = 'other';
+        otherRadio.style.marginRight = '10px';
+    
+        const otherTextInput = document.createElement('input');
+        otherTextInput.type = 'text';
+        otherTextInput.placeholder = 'Enter your name';
+        otherTextInput.style.marginLeft = '10px';
+        otherTextInput.style.fontSize = '20px';
+        otherTextInput.disabled = true; // Disable input by default
+    
+        otherRadio.addEventListener('change', () => {
+            otherTextInput.disabled = !otherRadio.checked;
+            if (otherRadio.checked) {
+                otherTextInput.focus();
+            }
+        });
+    
+        otherTextInput.addEventListener('input', () => {
+            if (otherRadio.checked) {
+                submitButton.disabled = otherTextInput.value.trim() === '';
+            }
+        });
+    
+        otherLabel.appendChild(otherRadio);
+        otherLabel.appendChild(document.createTextNode('Other'));
+        otherLabel.appendChild(otherTextInput);
+        formElem.appendChild(otherLabel);
+    
+        popup.appendChild(formElem);
+    
+        const submitButton = document.createElement('button');
+        submitButton.textContent = 'Submit';
+        submitButton.style.padding = '10px 20px';
+        submitButton.style.fontSize = '20px';
+        submitButton.style.backgroundColor = 'blue';
+        submitButton.style.color = 'white';
+        submitButton.style.border = 'none';
+        submitButton.style.cursor = 'pointer';
+        submitButton.disabled = true;
+    
+        formElem.addEventListener('change', () => {
+            const selectedRadio = formElem.querySelector('input[name="name"]:checked');
+            if (selectedRadio) {
+                if (selectedRadio.value !== 'other') {
+                    submitButton.disabled = false;
+                } else {
+                    submitButton.disabled = otherTextInput.value.trim() === '';
+                }
+            }
+        });
+    
+        submitButton.addEventListener('click', () => {
+            const selectedRadio = formElem.querySelector('input[name="name"]:checked');
+            let selectedName = selectedRadio.value;
+            if (selectedName === 'other') {
+                selectedName = otherTextInput.value.trim();
+            }
+    
+            document.body.removeChild(popup);
+            callback(selectedName);
+        });
+    
+        popup.appendChild(submitButton);
+        document.body.appendChild(popup);
+    };    
+
+    const handlePickup = (id, commentsCell, calledByCell, callButton) => {
+        showYesNoPopup("Did it pick up?", (didPickUp) => {
+            if (!didPickUp) {
+                commentsCell.textContent = "Not picked up";
+                commentsCell.style.color = "blue";
+                showNameSelectionPopup("Thanks, and you must be?", names, (calledBy) => {
+                    calledByCell.textContent = calledBy;
+                    updateCommentsAndCalledBy(id, "Not picked up", calledBy); // Update comments and calledBy in the database
+                });
+            } else {
+                handleComplain(id, commentsCell, calledByCell);
+            }
+            callButton.disabled = true; // Disable the call button after a comment is posted
+        });
+    };
+
+    const handleComplain = (id, commentsCell, calledByCell) => {
+        showYesNoPopup("Has complain?", (hasComplain) => {
+            if (!hasComplain) {
+                commentsCell.textContent = "Answered, All Good";
+                commentsCell.style.color = "green";
+                showNameSelectionPopup("Thanks, and you must be?", names, (calledBy) => {
+                    calledByCell.textContent = calledBy;
+                    updateCommentsAndCalledBy(id, "Answered, All Good", calledBy); // Update comments and calledBy in the database
+                });
+            } else {
+                const complain = prompt("Write the complain here:");
+                if (complain) {
+                    commentsCell.textContent = `Complain: ${complain}`;
+                    commentsCell.style.color = "red";
+                    showNameSelectionPopup("Thanks, and you must be?", names, (calledBy) => {
+                        calledByCell.textContent = calledBy;
+                        updateCommentsAndCalledBy(id, `Complain: ${complain}`, calledBy); // Update comments and calledBy in the database
+                        
+                        // Add the "Solved?" dropdown immediately after the complaint is recorded
+                        const solvedCell = commentsCell.parentElement.querySelector('td:last-child').previousElementSibling;
+                        
+                        const solvedDropdown = document.createElement('select');
+    
+                        const optionSelect = document.createElement('option');
+                        optionSelect.value = '';
+                        optionSelect.textContent = 'Select';
+                        optionSelect.disabled = true;
+                        optionSelect.selected = true;
+    
+                        const optionSolved = document.createElement('option');
+                        optionSolved.value = 'Solved';
+                        optionSolved.textContent = 'Solved';
+    
+                        const optionNotSolved = document.createElement('option');
+                        optionNotSolved.value = 'Not Solved';
+                        optionNotSolved.textContent = 'Not Solved';
+    
+                        solvedDropdown.appendChild(optionSelect);
+                        solvedDropdown.appendChild(optionSolved);
+                        solvedDropdown.appendChild(optionNotSolved);
+    
+                        solvedCell.appendChild(solvedDropdown);
+    
+                        solvedDropdown.addEventListener('change', () => {
+                            const newSolvedStatus = solvedDropdown.value;
+                            updateSolvedStatus(id, newSolvedStatus);
+                        });
+                    });
+                }
+            }
+        });
+    };    
 
     // Schedule PDF download at 23:55
     const schedulePdfDownload = () => {
         const now = new Date();
-        const millisUntil2355 = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 55, 0, 0) - now;
+        const millisUntil2350 = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 55, 0, 0) - now;
 
-        if (millisUntil2355 > 0) {
+        if (millisUntil2350 > 0) {
             setTimeout(() => {
                 generatePdf();
                 scheduleRowDeletion(); // Schedule deletion 5 minutes later
                 schedulePdfDownload(); // Reschedule for the next day
-            }, millisUntil2355);
+            }, millisUntil2350);
         } else {
-            schedulePdfDownload(); // If it's already past 23:55, schedule for the next day
+            schedulePdfDownload(); // If it's already past 23:50, schedule for the next day
         }
     };
 
@@ -368,4 +561,70 @@ document.addEventListener('DOMContentLoaded', () => {
     // Update day and date every minute
     setInterval(updateCurrentDayAndDate, 60000);
     updateCurrentDayAndDate();
+
+// Initialize Howl object for your alert sound
+const alertSound = new Howl({
+    src: ['./alert.wav'], // Your sound file path
+    preload: true
+});
+
+// Function to calculate remaining time
+function calculateRemainingTime(startTime, delay) {
+    const currentTime = new Date().getTime();
+    const elapsed = currentTime - startTime;
+    const remainingTime = delay - elapsed;
+    return remainingTime > 0 ? remainingTime : 0;
+}
+
+// Check-in button click event
+checkInButton.addEventListener('click', () => {
+    const selectedRoom = roomSelect.value;
+
+    if (checkedInRooms.has(selectedRoom)) {
+        alert(`Room ${selectedRoom} is already checked in.`);
+        return;
+    }
+
+    const checkInTime = getAmsterdamTime();
+    addCheckIn(selectedRoom, checkInTime);
+
+    // Store the start time in localStorage
+    const startTime = new Date().getTime();
+    localStorage.setItem(`startTime-${selectedRoom}`, startTime);
+
+    // Set the timer to play the sound after 10 minutes (600,000 milliseconds)
+    const delay = 600000; // 10 minutes in milliseconds
+    const timeoutId = setTimeout(() => {
+        alertSound.play(); // Play sound using Howler.js
+    }, delay);
+
+    // Store the timeout ID in localStorage to manage it on page refresh
+    localStorage.setItem(`timeoutId-${selectedRoom}`, timeoutId);
+});
+
+// On page load, check if there's a saved start time and calculate remaining time
+window.addEventListener('load', () => {
+    const selectedRoom = roomSelect.value;
+    const savedStartTime = localStorage.getItem(`startTime-${selectedRoom}`);
+
+    if (savedStartTime) {
+        const remainingTime = calculateRemainingTime(parseInt(savedStartTime), 600000);
+
+        if (remainingTime > 0) {
+            // If there's still time left, set a new timeout for the remaining time
+            const timeoutId = setTimeout(() => {
+                alertSound.play(); // Play sound using Howler.js
+            }, remainingTime);
+
+            // Update the timeout ID in localStorage
+            localStorage.setItem(`timeoutId-${selectedRoom}`, timeoutId);
+        } else if (remainingTime === 0) {
+            // Play the sound if remaining time is exactly 0 (not less)
+            alertSound.play();
+        }
+    }
+});
+
+    // Load saved data on page load
+    loadCheckInData();
 });
