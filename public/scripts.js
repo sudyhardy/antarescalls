@@ -89,21 +89,55 @@ document.addEventListener('DOMContentLoaded', () => {
         checkedInRooms.delete(id);
     });
 
-    socket.on('updateCheckIn', (update) => {
-        const row = document.querySelector(`tr[data-id="${update.id}"]`);
-        if (row) {
-            const commentsCell = row.querySelector('td:nth-child(5)');
-            const calledByCell = row.querySelector('td:nth-child(6)');
-            const solvedDropdown = row.querySelector('td:nth-child(7) select');
-
+    // Handle updated check-ins
+socket.on('checkInUpdated', (update) => {
+    // Find the existing row
+    const row = document.querySelector(`tr[data-id="${update.id}"]`);
+    if (row) {
+        // Update the row with new data
+        const commentsCell = row.querySelector('td:nth-child(5)');
+        const calledByCell = row.querySelector('td:nth-child(6)');
+        const solvedCell = row.querySelector('td:nth-child(7)');
+        
+        if (update.comments !== undefined) {
             commentsCell.textContent = update.comments;
+            commentsCell.style.color = update.comments.includes('Complain') || update.comments.includes('Not picked up') ? 'red' : 'green';
+        }
+        
+        if (update.calledBy !== undefined) {
             calledByCell.textContent = update.calledBy;
-
+        }
+        
+        if (update.solvedStatus !== undefined) {
+            const solvedDropdown = solvedCell.querySelector('select');
             if (solvedDropdown) {
                 solvedDropdown.value = update.solvedStatus;
+            } else {
+                // Create and append dropdown if not already present
+                const solvedDropdown = document.createElement('select');
+                const options = ['Select', 'Solved', 'Not Solved'].map(status => {
+                    const option = document.createElement('option');
+                    option.value = status;
+                    option.textContent = status;
+                    if (status === update.solvedStatus) option.selected = true;
+                    return option;
+                });
+                options.forEach(option => solvedDropdown.appendChild(option));
+                solvedCell.appendChild(solvedDropdown);
+
+                // Handle change event for new dropdown
+                solvedDropdown.addEventListener('change', () => {
+                    const newSolvedStatus = solvedDropdown.value;
+                    updateSolvedStatus(update.id, newSolvedStatus);
+                });
             }
         }
-    });
+    } else {
+        // Row doesn't exist, add a new one
+        addTableRow(update.room, new Date(update.checkInTime), update.id, update.comments, update.calledBy, update.solvedStatus);
+    }
+});
+
 
     // Function to save check-in data to the server
     const addCheckIn = async (room, checkInTime) => {
