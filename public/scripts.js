@@ -25,6 +25,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentDateElem = document.getElementById('currentDate');
     const checkedInRooms = new Set();
 
+     // Initialize Socket.IO
+     const socket = io();
+
     // Populate the room select dropdown
     rooms.forEach(room => {
         const option = document.createElement('option');
@@ -68,6 +71,39 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
+     // Socket.IO Event Listeners
+     socket.on('newCheckIn', (checkIn) => {
+        addTableRow(
+            checkIn.room,
+            new Date(checkIn.checkInTime),
+            checkIn._id,
+            checkIn.comments,
+            checkIn.calledBy,
+            checkIn.solvedStatus
+        );
+    });
+
+    socket.on('deleteCheckIn', (id) => {
+        const row = document.querySelector(`tr[data-id="${id}"]`);
+        if (row) row.remove();
+        checkedInRooms.delete(id);
+    });
+
+    socket.on('updateCheckIn', (update) => {
+        const row = document.querySelector(`tr[data-id="${update.id}"]`);
+        if (row) {
+            const commentsCell = row.querySelector('td:nth-child(5)');
+            const calledByCell = row.querySelector('td:nth-child(6)');
+            const solvedDropdown = row.querySelector('td:nth-child(7) select');
+
+            commentsCell.textContent = update.comments;
+            calledByCell.textContent = update.calledBy;
+
+            if (solvedDropdown) {
+                solvedDropdown.value = update.solvedStatus;
+            }
+        }
+    });
 
     // Function to save check-in data to the server
     const addCheckIn = async (room, checkInTime) => {
@@ -80,6 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ room, checkInTime })
             });
             const data = await response.json();
+            socket.emit('newCheckIn', data); // Emit event to other clients
             addTableRow(room, new Date(data.checkInTime), data._id);
         } catch (err) {
             console.error('Error adding check-in:', err);
@@ -90,6 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const deleteCheckIn = async (id, row) => {
         try {
             await fetch(`/api/checkins/${id}`, { method: 'DELETE' });
+            socket.emit('deleteCheckIn', id); // Emit event to other clients
             row.remove();
             checkedInRooms.delete(id);
         } catch (err) {
@@ -106,10 +144,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 body: JSON.stringify({ solvedStatus }),
             });
+            socket.emit('updateCheckIn', { id, solvedStatus }); // Emit event to other clients
         } catch (err) {
             console.error('Error updating solved status:', err);
         }
-    };  
+    };
 
     const addTableRow = (room, checkInTime, id, comments = '', calledBy = '', solvedStatus = '') => {
         const row = document.createElement('tr');
@@ -241,6 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 body: JSON.stringify({ comments, calledBy }),
             });
+            socket.emit('updateCheckIn', { id, comments, calledBy }); // Emit event to other clients
         } catch (err) {
             console.error('Error updating comments and calledBy:', err);
         }
@@ -568,14 +608,6 @@ const alertSound = new Howl({
     preload: true
 });
 
-// Function to calculate remaining time
-function calculateRemainingTime(startTime, delay) {
-    const currentTime = new Date().getTime();
-    const elapsed = currentTime - startTime;
-    const remainingTime = delay - elapsed;
-    return remainingTime > 0 ? remainingTime : 0;
-}
-
 // Check-in button click event
 checkInButton.addEventListener('click', () => {
     const selectedRoom = roomSelect.value;
@@ -585,45 +617,16 @@ checkInButton.addEventListener('click', () => {
         return;
     }
 
-    const checkInTime = getAmsterdamTime();
+    const checkInTime = Date.now();
     addCheckIn(selectedRoom, checkInTime);
 
-    // Store the start time in localStorage
-    const startTime = new Date().getTime();
-    localStorage.setItem(`startTime-${selectedRoom}`, startTime);
-
-    // Set the timer to play the sound after 10 minutes (600,000 milliseconds)
-    const delay = 600000; // 10 minutes in milliseconds
-    const timeoutId = setTimeout(() => {
+    // Set timer for remaining time until sound should play
+    setTimeout(() => {
         alertSound.play(); // Play sound using Howler.js
-    }, delay);
-
-    // Store the timeout ID in localStorage to manage it on page refresh
-    localStorage.setItem(`timeoutId-${selectedRoom}`, timeoutId);
+    }, 600000); // 10 minutes in milliseconds
 });
 
-// On page load, check if there's a saved start time and calculate remaining time
-window.addEventListener('load', () => {
-    const selectedRoom = roomSelect.value;
-    const savedStartTime = localStorage.getItem(`startTime-${selectedRoom}`);
 
-    if (savedStartTime) {
-        const remainingTime = calculateRemainingTime(parseInt(savedStartTime), 600000);
-
-        if (remainingTime > 0) {
-            // If there's still time left, set a new timeout for the remaining time
-            const timeoutId = setTimeout(() => {
-                alertSound.play(); // Play sound using Howler.js
-            }, remainingTime);
-
-            // Update the timeout ID in localStorage
-            localStorage.setItem(`timeoutId-${selectedRoom}`, timeoutId);
-        } else if (remainingTime === 0) {
-            // Play the sound if remaining time is exactly 0 (not less)
-            alertSound.play();
-        }
-    }
-});
 
     // Load saved data on page load
     loadCheckInData();
