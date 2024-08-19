@@ -1,4 +1,3 @@
-const functions = require('firebase-functions');
 const express = require('express');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
@@ -95,7 +94,7 @@ app.delete('/api/checkins', async (req, res) => {
 
 // Serve static files (your HTML, CSS, and JS)
 app.use(express.static('public'));
-exports.api = functions.https.onRequest(app);
+
 // Start the server
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
