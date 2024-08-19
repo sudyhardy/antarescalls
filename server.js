@@ -15,23 +15,50 @@ app.use(cors());
 
 // Connect to MongoDB
 mongoose.connect('mongodb+srv://antares:Antareslaan10@antares.tnemt.mongodb.net/?retryWrites=true&w=majority&appName=antares')
-    .then(() => console.log('MongoDB connected...'))
+    .then(() => {
+        console.log('MongoDB connected...');
+        setupChangeStream();
+    })
     .catch(err => console.log(err));
 
 // Create a schema and model for check-ins
 const checkInSchema = new mongoose.Schema({
     room: String,
     checkInTime: Date,
-    comments: String,     // Add comments field
-    calledBy: String,      // Add calledBy field
-    solvedStatus: {       // Add solvedStatus field
+    comments: String,
+    calledBy: String,
+    solvedStatus: {
         type: String,
         enum: ['Solved', 'Not Solved'],
-        default: 'Not Solved' // Default to 'Not Solved'
+        default: 'Not Solved'
     }
 });
 
 const CheckIn = mongoose.model('CheckIn', checkInSchema);
+
+// Function to setup Change Stream
+function setupChangeStream() {
+    const db = mongoose.connection.db;
+    const checkinsCollection = db.collection('checkins');
+
+    const changeStream = checkinsCollection.watch();
+
+    changeStream.on('change', (change) => {
+        switch (change.operationType) {
+            case 'insert':
+                io.emit('checkInAdded', change.fullDocument);
+                break;
+            case 'update':
+                io.emit('checkInUpdated', { id: change.documentKey._id, ...change.updateDescription.updatedFields });
+                break;
+            case 'delete':
+                io.emit('checkInDeleted', change.documentKey._id);
+                break;
+            default:
+                console.log(`Unhandled change type: ${change.operationType}`);
+        }
+    });
+}
 
 // Socket.io connection
 io.on('connection', (socket) => {
@@ -60,10 +87,10 @@ app.post('/api/checkins', async (req, res) => {
 });
 
 app.put('/api/checkins/:id', async (req, res) => {
-    const { comments, calledBy, solvedStatus } = req.body; // Include solvedStatus in the destructuring
+    const { comments, calledBy, solvedStatus } = req.body;
     const updatedCheckIn = await CheckIn.findByIdAndUpdate(
         req.params.id,
-        { comments, calledBy, solvedStatus }, // Add solvedStatus to the update object
+        { comments, calledBy, solvedStatus },
         { new: true }
     );
 
@@ -98,3 +125,4 @@ app.use(express.static('public'));
 // Start the server
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
