@@ -19,7 +19,7 @@ mongoose.connect('mongodb+srv://antares:Antareslaan10@antares.tnemt.mongodb.net/
         console.log('MongoDB connected...');
         setupChangeStream();
     })
-    .catch(err => console.log(err));
+    .catch(err => console.log('Error connecting to MongoDB:', err));
 
 // Create a schema and model for check-ins
 const checkInSchema = new mongoose.Schema({
@@ -62,62 +62,105 @@ function setupChangeStream() {
 
 // Socket.io connection
 io.on('connection', (socket) => {
-    console.log('a user connected');
+    console.log('A user connected');
 
     socket.on('disconnect', () => {
-        console.log('user disconnected');
+        console.log('User disconnected');
     });
+
+    socket.on('playAlertSound', (id) => {
+        io.emit('playAlertSound', id);
+    });
+    // You can add more socket events here as needed.
 });
 
 // Routes
 app.get('/api/checkins', async (req, res) => {
-    const checkIns = await CheckIn.find();
-    res.json(checkIns);
+    try {
+        const checkIns = await CheckIn.find();
+        res.json(checkIns);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch check-ins' });
+    }
 });
 
 app.post('/api/checkins', async (req, res) => {
-    const { room, checkInTime, comments, calledBy } = req.body;
-    const newCheckIn = new CheckIn({ room, checkInTime, comments, calledBy });
-    await newCheckIn.save();
+    try {
+        const { room, checkInTime, comments, calledBy } = req.body;
+        let checkIn = await CheckIn.findOne({ room });
 
-    // Broadcast the event to all connected clients
-    io.emit('checkInAdded', newCheckIn);
+        if (checkIn) {
+            // Update existing check-in
+            checkIn.checkInTime = checkInTime;
+            checkIn.comments = comments;
+            checkIn.calledBy = calledBy;
+            await checkIn.save();
 
-    res.json(newCheckIn);
+            // Broadcast the event to all connected clients
+            io.emit('checkInUpdated', checkIn);
+            res.json(checkIn);
+        } else {
+            // Create new check-in
+            checkIn = new CheckIn({ room, checkInTime, comments, calledBy });
+            await checkIn.save();
+
+            // Broadcast the event to all connected clients
+            io.emit('newCheckIn', checkIn);
+            res.json(checkIn);
+        }
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to add or update check-in' });
+    }
 });
+
 
 app.put('/api/checkins/:id', async (req, res) => {
-    const { comments, calledBy, solvedStatus } = req.body;
-    const updatedCheckIn = await CheckIn.findByIdAndUpdate(
-        req.params.id,
-        { comments, calledBy, solvedStatus },
-        { new: true }
-    );
+    try {
+        const { comments, calledBy, solvedStatus } = req.body;
+        const updatedCheckIn = await CheckIn.findByIdAndUpdate(
+            req.params.id,
+            { comments, calledBy, solvedStatus },
+            { new: true }
+        );
 
-    // Broadcast the event to all connected clients
-    io.emit('checkInUpdated', updatedCheckIn);
+        // Broadcast the event to all connected clients
+        io.emit('checkInUpdated', updatedCheckIn);
 
-    res.json(updatedCheckIn);
+        res.json(updatedCheckIn);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to update check-in' });
+    }
 });
+
+
+
 
 app.delete('/api/checkins/:id', async (req, res) => {
-    await CheckIn.findByIdAndDelete(req.params.id);
+    try {
+        await CheckIn.findByIdAndDelete(req.params.id);
 
-    // Broadcast the event to all connected clients
-    io.emit('checkInDeleted', req.params.id);
+        // Broadcast the event to all connected clients
+        io.emit('deleteCheckIn', req.params.id);
 
-    res.json({ success: true });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete check-in' });
+    }
 });
 
-// Route to delete all check-ins
 app.delete('/api/checkins', async (req, res) => {
-    await CheckIn.deleteMany({});
+    try {
+        await CheckIn.deleteMany({});
 
-    // Broadcast the event to all connected clients
-    io.emit('checkInsCleared');
+        // Broadcast the event to all connected clients
+        io.emit('clearAllCheckIns');
 
-    res.json({ success: true });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to clear check-ins' });
+    }
 });
+
 
 // Serve static files (your HTML, CSS, and JS)
 app.use(express.static('public'));
@@ -125,4 +168,3 @@ app.use(express.static('public'));
 // Start the server
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-

@@ -25,8 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentDateElem = document.getElementById('currentDate');
     const checkedInRooms = new Set();
 
-     // Initialize Socket.IO
-     const socket = io();
+    // Initialize Socket.IO
+    const socket = io();
 
     // Populate the room select dropdown
     rooms.forEach(room => {
@@ -52,27 +52,29 @@ document.addEventListener('DOMContentLoaded', () => {
         currentDateElem.textContent = now.toLocaleDateString('en-GB');
     };
 
-    const loadCheckInData = async () => {
-        try {
-            const response = await fetch('/api/checkins');
-            const data = await response.json();
-            data.forEach(row => {
-                addTableRow(
-                    row.room,
-                    new Date(row.checkInTime),
-                    row._id,
-                    row.comments,
-                    row.calledBy,
-                    row.solvedStatus // Pass solvedStatus to addTableRow
-                );
-            });
-        } catch (err) {
-            console.error('Error loading check-in data:', err);
-        }
-    };
-    
-     // Socket.IO Event Listeners
-     socket.on('newCheckIn', (checkIn) => {
+ // Function to load check-in data from the server
+const loadCheckInData = async () => {
+    try {
+        const response = await fetch('/api/checkins');
+        const data = await response.json();
+        data.forEach(row => {
+            addTableRow(
+                row.room,
+                new Date(row.checkInTime),
+                row._id,
+                row.comments,
+                row.calledBy,
+                row.solvedStatus // Pass solvedStatus to addTableRow
+            );
+        });
+    } catch (err) {
+        console.error('Error loading check-in data:', err);
+    }
+};
+
+// Socket.IO Event Listeners
+socket.on('newCheckIn', (checkIn) => {
+    if (!document.querySelector(`tr[data-id="${checkIn._id}"]`)) {
         addTableRow(
             checkIn.room,
             new Date(checkIn.checkInTime),
@@ -81,40 +83,49 @@ document.addEventListener('DOMContentLoaded', () => {
             checkIn.calledBy,
             checkIn.solvedStatus
         );
-    });
+    }
+});
 
-    socket.on('deleteCheckIn', (id) => {
-        const row = document.querySelector(`tr[data-id="${id}"]`);
-        if (row) row.remove();
-        checkedInRooms.delete(id);
-    });
+socket.on('deleteCheckIn', (id) => {
+    const row = document.querySelector(`tr[data-id="${id}"]`);
+    if (row) row.remove();
+    checkedInRooms.delete(id);
+});
 
-    // Handle updated check-ins
+
+// Handle updated check-ins
 socket.on('checkInUpdated', (update) => {
     // Find the existing row
-    const row = document.querySelector(`tr[data-id="${update.id}"]`);
+    const row = document.querySelector(`tr[data-id="${update._id}"]`);
     if (row) {
         // Update the row with new data
         const commentsCell = row.querySelector('td:nth-child(5)');
         const calledByCell = row.querySelector('td:nth-child(6)');
         const solvedCell = row.querySelector('td:nth-child(7)');
-        
+        const actionCell = row.querySelector('td:nth-child(4)');
+
         if (update.comments !== undefined) {
             commentsCell.textContent = update.comments;
-            commentsCell.style.color = update.comments.includes('Complain') || update.comments.includes('Not picked up') ? 'red' : 'green';
+            if (update.comments.includes('Complain')) {
+                commentsCell.style.color = 'red';
+            } else if (update.comments.includes('Not picked up')) {
+                commentsCell.style.color = 'blue';
+            } else {
+                commentsCell.style.color = 'green';
+            }
         }
-        
+
         if (update.calledBy !== undefined) {
             calledByCell.textContent = update.calledBy;
         }
-        
-        if (update.solvedStatus !== undefined) {
-            const solvedDropdown = solvedCell.querySelector('select');
+
+        if (update.solvedStatus !== undefined && update.comments.includes('Complain')) {
+            let solvedDropdown = solvedCell.querySelector('select');
             if (solvedDropdown) {
                 solvedDropdown.value = update.solvedStatus;
             } else {
                 // Create and append dropdown if not already present
-                const solvedDropdown = document.createElement('select');
+                solvedDropdown = document.createElement('select');
                 const options = ['Select', 'Solved', 'Not Solved'].map(status => {
                     const option = document.createElement('option');
                     option.value = status;
@@ -128,16 +139,78 @@ socket.on('checkInUpdated', (update) => {
                 // Handle change event for new dropdown
                 solvedDropdown.addEventListener('change', () => {
                     const newSolvedStatus = solvedDropdown.value;
-                    updateSolvedStatus(update.id, newSolvedStatus);
+                    updateSolvedStatus(update._id, newSolvedStatus);
                 });
             }
+        } else {
+            // Remove the dropdown if comments no longer include "Complain"
+            solvedCell.innerHTML = '';
+        }
+
+        // Update the action column
+        const callButton = actionCell.querySelector('.call-button');
+        if (callButton) {
+            callButton.disabled = !update.comments.includes('Not picked up');
         }
     } else {
         // Row doesn't exist, add a new one
-        addTableRow(update.room, new Date(update.checkInTime), update.id, update.comments, update.calledBy, update.solvedStatus);
+        addTableRow(update.room, new Date(update.checkInTime), update._id, update.comments, update.calledBy, update.solvedStatus);
     }
 });
 
+// Handle play alert sound event
+socket.on('playAlertSound', (id) => {
+    const row = document.querySelector(`tr[data-id="${id}"]`);
+    if (row) {
+        alertSound.play();
+    }
+});
+
+// Function to update solved status on the server
+const updateSolvedStatus = async (id, solvedStatus) => {
+    try {
+        await fetch(`/api/checkins/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ solvedStatus }),
+        });
+        socket.emit('checkInUpdated', { _id: id, solvedStatus }); // Emit event to other clients
+    } catch (err) {
+        console.error('Error updating solved status:', err);
+    }
+};
+
+    // Function to delete a check-in
+const deleteCheckIn = async (id, row) => {
+    try {
+        await fetch(`/api/checkins/${id}`, { method: 'DELETE' });
+        socket.emit('deleteCheckIn', id); // Emit event to other clients
+        tbody.removeChild(row);
+        checkedInRooms.delete(row.querySelector('td:first-child').textContent);
+    } catch (err) {
+        console.error('Error deleting check-in:', err);
+    }
+};
+
+// Function to clear all check-ins
+const clearTableAndDatabase = async () => {
+    try {
+        await fetch('/api/checkins', { method: 'DELETE' });
+        socket.emit('clearTableAndDatabase'); // Emit event to other clients
+        tbody.innerHTML = '';
+        checkedInRooms.clear();
+    } catch (err) {
+        console.error('Error clearing all check-ins:', err);
+    }
+};
+
+// Handle clear all check-ins event
+socket.on('clearTableAndDatabase', () => {
+    tbody.innerHTML = '';
+    checkedInRooms.clear();
+});
 
     // Function to save check-in data to the server
     const addCheckIn = async (room, checkInTime) => {
@@ -150,49 +223,43 @@ socket.on('checkInUpdated', (update) => {
                 body: JSON.stringify({ room, checkInTime })
             });
             const data = await response.json();
-            socket.emit('newCheckIn', data); // Emit event to other clients
-            addTableRow(room, new Date(data.checkInTime), data._id);
+            if (!document.querySelector(`tr[data-id="${data._id}"]`)) {
+                socket.emit('newCheckIn', data); // Emit event to other clients
+                addTableRow(room, new Date(data.checkInTime), data._id);
+            }
         } catch (err) {
             console.error('Error adding check-in:', err);
         }
     };
+    
 
-    // Function to delete check-in data from the server
-    const deleteCheckIn = async (id, row) => {
+    // Function to update check-in data on the server
+    const updateCheckIn = async (id, room, checkInTime) => {
         try {
-            await fetch(`/api/checkins/${id}`, { method: 'DELETE' });
-            socket.emit('deleteCheckIn', id); // Emit event to other clients
-            row.remove();
-            checkedInRooms.delete(id);
-        } catch (err) {
-            console.error('Error deleting check-in:', err);
-        }
-    };
-
-    const updateSolvedStatus = async (id, solvedStatus) => {
-        try {
-            await fetch(`/api/checkins/${id}`, {
+            const response = await fetch(`/api/checkins/${id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ solvedStatus }),
+                body: JSON.stringify({ room, checkInTime })
             });
-            socket.emit('updateCheckIn', { id, solvedStatus }); // Emit event to other clients
+            const data = await response.json();
+            socket.emit('checkInUpdated', data);
         } catch (err) {
-            console.error('Error updating solved status:', err);
+            console.error('Error updating check-in:', err);
         }
     };
 
     const addTableRow = (room, checkInTime, id, comments = '', calledBy = '', solvedStatus = '') => {
         const row = document.createElement('tr');
+        row.setAttribute('data-id', id);
         const roomNumberCell = document.createElement('td');
         const checkInTimeCell = document.createElement('td');
         const countdownCell = document.createElement('td');
         const actionCell = document.createElement('td');
         const commentsCell = document.createElement('td');
         const calledByCell = document.createElement('td');
-        const solvedCell = document.createElement('td'); // New cell for "Solved?" column
+        const solvedCell = document.createElement('td');
         const deleteCell = document.createElement('td');
     
         roomNumberCell.textContent = room;
@@ -222,7 +289,7 @@ socket.on('checkInUpdated', (update) => {
         row.appendChild(actionCell);
         row.appendChild(commentsCell);
         row.appendChild(calledByCell);
-        row.appendChild(solvedCell); // Append the new "Solved?" column
+        row.appendChild(solvedCell);
         row.appendChild(deleteCell);
     
         tbody.appendChild(row);
@@ -231,9 +298,14 @@ socket.on('checkInUpdated', (update) => {
     
         if (comments) {
             commentsCell.textContent = comments;
-            commentsCell.style.color = comments.includes('Complain') || comments.includes('Not picked up') ? 'red' : 'green';
+            if (comments.includes('Complain')) {
+                commentsCell.style.color = 'red';
+            } else if (comments.includes('Not picked up')) {
+                commentsCell.style.color = 'blue';
+            } else {
+                commentsCell.style.color = 'green';
+            }
     
-            // If there's a complaint, add a dropdown for "Solved?" status
             if (comments.includes('Complain')) {
                 const solvedDropdown = document.createElement('select');
     
@@ -274,7 +346,7 @@ socket.on('checkInUpdated', (update) => {
         // Countdown logic
         const interval = setInterval(() => {
             const now = new Date();
-            const diff = 10 * 60 * 1000 - (now - checkInTime); // 1 minute in milliseconds for testing
+            const diff = 10 * 60 * 1000 - (now - checkInTime); // 10 minutes in milliseconds
             if (diff <= 0) {
                 clearInterval(interval);
                 countdownCell.textContent = '00:00';
@@ -303,8 +375,7 @@ socket.on('checkInUpdated', (update) => {
             deleteCheckIn(id, row);
         });
     };
-    
- 
+
     const updateCommentsAndCalledBy = async (id, comments, calledBy) => {
         try {
             await fetch(`/api/checkins/${id}`, {
@@ -328,11 +399,11 @@ socket.on('checkInUpdated', (update) => {
         countdownPopup.style.top = '50%';
         countdownPopup.style.transform = 'translate(-50%, -50%)';
         countdownPopup.style.backgroundColor = 'white';
-        countdownPopup.style.padding = '60px'; // Increased padding for bigger size
+        countdownPopup.style.padding = '60px';
         countdownPopup.style.boxShadow = '0px 0px 10px rgba(0, 0, 0, 0.1)';
         countdownPopup.style.textAlign = 'center';
         countdownPopup.style.zIndex = '1000';
-        countdownPopup.style.fontSize = '24px'; // Increase font size
+        countdownPopup.style.fontSize = '24px';
 
         const messageElem = document.createElement('p');
         messageElem.textContent = `${message}`;
@@ -362,11 +433,11 @@ socket.on('checkInUpdated', (update) => {
         popup.style.top = '50%';
         popup.style.transform = 'translate(-50%, -50%)';
         popup.style.backgroundColor = 'white';
-        popup.style.padding = '60px'; // Increased padding for bigger size
+        popup.style.padding = '60px';
         popup.style.boxShadow = '0px 0px 10px rgba(0, 0, 0, 0.1)';
         popup.style.textAlign = 'center';
         popup.style.zIndex = '1000';
-        popup.style.fontSize = '24px'; // Increase font size
+        popup.style.fontSize = '24px';
 
         const messageElem = document.createElement('p');
         messageElem.textContent = message;
@@ -374,11 +445,11 @@ socket.on('checkInUpdated', (update) => {
 
         const buttonYes = document.createElement('button');
         buttonYes.textContent = 'Yes';
-        buttonYes.style.marginRight = '20px'; // Adjust margin for larger buttons
-        buttonYes.style.padding = '10px 20px'; // Increase button size
-        buttonYes.style.fontSize = '20px'; // Increase font size for button text
-        buttonYes.style.backgroundColor = 'blue'; // Blue button color
-        buttonYes.style.color = 'white'; // White text color
+        buttonYes.style.marginRight = '20px';
+        buttonYes.style.padding = '10px 20px';
+        buttonYes.style.fontSize = '20px';
+        buttonYes.style.backgroundColor = 'blue';
+        buttonYes.style.color = 'white';
         buttonYes.style.border = 'none';
         buttonYes.style.cursor = 'pointer';
         buttonYes.addEventListener('click', () => {
@@ -389,10 +460,10 @@ socket.on('checkInUpdated', (update) => {
 
         const buttonNo = document.createElement('button');
         buttonNo.textContent = 'No';
-        buttonNo.style.padding = '10px 20px'; // Increase button size
-        buttonNo.style.fontSize = '20px'; // Increase font size for button text
-        buttonNo.style.backgroundColor = 'blue'; // Blue button color
-        buttonNo.style.color = 'white'; // White text color
+        buttonNo.style.padding = '10px 20px';
+        buttonNo.style.fontSize = '20px';
+        buttonNo.style.backgroundColor = 'blue';
+        buttonNo.style.color = 'white';
         buttonNo.style.border = 'none';
         buttonNo.style.cursor = 'pointer';
         buttonNo.addEventListener('click', () => {
@@ -416,68 +487,67 @@ socket.on('checkInUpdated', (update) => {
         popup.style.textAlign = 'center';
         popup.style.zIndex = '1000';
         popup.style.fontSize = '24px';
-    
+
         const messageElem = document.createElement('p');
         messageElem.textContent = message;
         popup.appendChild(messageElem);
-    
+
         const formElem = document.createElement('form');
         formElem.style.textAlign = 'left';
-    
+
         names.forEach(name => {
             const label = document.createElement('label');
             label.style.display = 'block';
             label.style.fontSize = '20px';
-            
+
             const radio = document.createElement('input');
             radio.type = 'radio';
             radio.name = 'name';
             radio.value = name;
             radio.style.marginRight = '10px';
-            
+
             label.appendChild(radio);
             label.appendChild(document.createTextNode(name));
             formElem.appendChild(label);
         });
-    
-        // Add the "Other" option with a text input
+
         const otherLabel = document.createElement('label');
         otherLabel.style.display = 'block';
         otherLabel.style.fontSize = '20px';
-    
+
         const otherRadio = document.createElement('input');
         otherRadio.type = 'radio';
         otherRadio.name = 'name';
         otherRadio.value = 'other';
         otherRadio.style.marginRight = '10px';
-    
+
         const otherTextInput = document.createElement('input');
         otherTextInput.type = 'text';
         otherTextInput.placeholder = 'Enter your name';
         otherTextInput.style.marginLeft = '10px';
         otherTextInput.style.fontSize = '20px';
-        otherTextInput.disabled = true; // Disable input by default
-    
+        otherTextInput.disabled = true;
+
         otherRadio.addEventListener('change', () => {
             otherTextInput.disabled = !otherRadio.checked;
             if (otherRadio.checked) {
                 otherTextInput.focus();
             }
         });
-    
+
         otherTextInput.addEventListener('input', () => {
             if (otherRadio.checked) {
                 submitButton.disabled = otherTextInput.value.trim() === '';
             }
         });
-    
+
         otherLabel.appendChild(otherRadio);
         otherLabel.appendChild(document.createTextNode('Other'));
         otherLabel.appendChild(otherTextInput);
         formElem.appendChild(otherLabel);
-    
+
         popup.appendChild(formElem);
-    
+
         const submitButton = document.createElement('button');
         submitButton.textContent = 'Submit';
         submitButton.style.padding = '10px 20px';
@@ -487,7 +557,7 @@ socket.on('checkInUpdated', (update) => {
         submitButton.style.border = 'none';
         submitButton.style.cursor = 'pointer';
         submitButton.disabled = true;
-    
+
         formElem.addEventListener('change', () => {
             const selectedRadio = formElem.querySelector('input[name="name"]:checked');
             if (selectedRadio) {
@@ -498,21 +568,21 @@ socket.on('checkInUpdated', (update) => {
                 }
             }
         });
-    
+
         submitButton.addEventListener('click', () => {
             const selectedRadio = formElem.querySelector('input[name="name"]:checked');
             let selectedName = selectedRadio.value;
             if (selectedName === 'other') {
                 selectedName = otherTextInput.value.trim();
             }
-    
+
             document.body.removeChild(popup);
             callback(selectedName);
         });
-    
+
         popup.appendChild(submitButton);
         document.body.appendChild(popup);
-    };    
+    };
 
     const handlePickup = (id, commentsCell, calledByCell, callButton) => {
         showYesNoPopup("Did it pick up?", (didPickUp) => {
@@ -581,7 +651,7 @@ socket.on('checkInUpdated', (update) => {
                 }
             }
         });
-    };    
+    };
 
     // Schedule PDF download at 23:55
     const schedulePdfDownload = () => {
@@ -618,17 +688,6 @@ socket.on('checkInUpdated', (update) => {
         html2pdf().from(element).set(opt).save();
     };
 
-    const clearTableAndDatabase = async () => {
-        // Clear all rows from the table
-        tbody.innerHTML = '';
-
-        // Clear all entries from the database
-        try {
-            await fetch('/api/checkins', { method: 'DELETE' });
-        } catch (err) {
-            console.error('Error clearing database:', err);
-        }
-    };
 
     schedulePdfDownload();
 
@@ -636,31 +695,29 @@ socket.on('checkInUpdated', (update) => {
     setInterval(updateCurrentDayAndDate, 60000);
     updateCurrentDayAndDate();
 
-// Initialize Howl object for your alert sound
-const alertSound = new Howl({
-    src: ['./alert.wav'], // Your sound file path
-    preload: true
-});
+    // Initialize Howl object for your alert sound
+    const alertSound = new Howl({
+        src: ['./alert.wav'], // Your sound file path
+        preload: true
+    });
 
-// Check-in button click event
-checkInButton.addEventListener('click', () => {
-    const selectedRoom = roomSelect.value;
+    // Check-in button click event
+    checkInButton.addEventListener('click', () => {
+        const selectedRoom = roomSelect.value;
 
-    if (checkedInRooms.has(selectedRoom)) {
-        alert(`Room ${selectedRoom} is already checked in.`);
-        return;
-    }
+        if (checkedInRooms.has(selectedRoom)) {
+            alert(`Room ${selectedRoom} is already checked in.`);
+            return;
+        }
 
-    const checkInTime = Date.now();
-    addCheckIn(selectedRoom, checkInTime);
+        const checkInTime = Date.now();
+        addCheckIn(selectedRoom, checkInTime);
 
-    // Set timer for remaining time until sound should play
-    setTimeout(() => {
-        alertSound.play(); // Play sound using Howler.js
-    }, 600000); // 10 minutes in milliseconds
-});
-
-
+        // Set timer for remaining time until sound should play
+        setTimeout(() => {
+            alertSound.play(); // Play sound using Howler.js
+        }, 600000); // 10 minutes in milliseconds
+    });
 
     // Load saved data on page load
     loadCheckInData();
