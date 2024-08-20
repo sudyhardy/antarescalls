@@ -38,10 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Function to get the current time in Amsterdam timezone
     const getAmsterdamTime = () => {
-        const now = new Date();
-        const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-        const amsterdamTime = new Date(utcTime + (2 * 3600000)); // Adjust for UTC+2 or UTC+1 as needed
-        return amsterdamTime;
+        return moment().tz('Europe/Amsterdam').toDate();
     };
 
     // Function to update the current day and date
@@ -661,11 +658,11 @@ socket.on('clearTableAndDatabase', () => {
         if (millisUntil2350 > 0) {
             setTimeout(() => {
                 generatePdf();
-                scheduleRowDeletion(); // Schedule deletion 5 minutes later
-                schedulePdfDownload(); // Reschedule for the next day
+                scheduleRowDeletion();
+                schedulePdfDownload(); 
             }, millisUntil2350);
         } else {
-            schedulePdfDownload(); // If it's already past 23:50, schedule for the next day
+            schedulePdfDownload(); 
         }
     };
 
@@ -683,7 +680,7 @@ socket.on('clearTableAndDatabase', () => {
             filename: `AntaresCallCheckIn_${new Date().toISOString().split('T')[0]}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: { scale: 2 },
-            jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+            jsPDF: { unit: 'in', format: 'letter', orientation: 'landscape' }
         };
         html2pdf().from(element).set(opt).save();
     };
