@@ -155,14 +155,6 @@ socket.on('checkInUpdated', (update) => {
     }
 });
 
-// Handle play alert sound event
-socket.on('playAlertSound', (id) => {
-    const row = document.querySelector(`tr[data-id="${id}"]`);
-    if (row) {
-        alertSound.play();
-    }
-});
-
 // Function to update solved status on the server
 const updateSolvedStatus = async (id, solvedStatus) => {
     try {
@@ -691,6 +683,15 @@ socket.on('clearTableAndDatabase', () => {
     // Update day and date every minute
     setInterval(updateCurrentDayAndDate, 60000);
     updateCurrentDayAndDate();
+
+
+    // Handle play alert sound event
+    socket.on('playAlertSound', (id) => {
+    const row = document.querySelector(`tr[data-id="${id}"]`);
+    if (row) {
+        alertSound.play();
+    }
+    });
 
     // Initialize Howl object for your alert sound
     const alertSound = new Howl({
