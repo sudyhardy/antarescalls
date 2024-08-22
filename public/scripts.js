@@ -148,6 +148,9 @@ socket.on('checkInUpdated', (update) => {
         const callButton = actionCell.querySelector('.call-button');
         if (callButton) {
             callButton.disabled = !update.comments.includes('Not picked up');
+            if (update.comments.includes('Not picked up')) {
+                callButton.style.display = 'none'; // Hide the call button if comments include "Not picked up"
+            }
         }
     } else {
         // Row doesn't exist, add a new one
@@ -215,6 +218,7 @@ socket.on('clearTableAndDatabase', () => {
             if (!document.querySelector(`tr[data-id="${data._id}"]`)) {
                 socket.emit('newCheckIn', data); // Emit event to other clients
                 addTableRow(room, new Date(data.checkInTime), data._id);
+                socket.emit('playAlertSound', data._id); // Emit alert sound event to all clients
             }
         } catch (err) {
             console.error('Error adding check-in:', err);
@@ -581,11 +585,13 @@ socket.on('clearTableAndDatabase', () => {
                 showNameSelectionPopup("Thanks, and you must be?", names, (calledBy) => {
                     calledByCell.textContent = calledBy;
                     updateCommentsAndCalledBy(id, "Not picked up", calledBy); // Update comments and calledBy in the database
+                    socket.emit('checkInUpdated', { id, comments: "Not picked up", calledBy }); // Emit event to other clients
                 });
             } else {
                 handleComplain(id, commentsCell, calledByCell);
             }
             callButton.disabled = true; // Disable the call button after a comment is posted
+            callButton.style.display = 'none'; // Hide the call button after submission
         });
     };
 

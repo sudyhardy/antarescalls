@@ -106,6 +106,7 @@ app.post('/api/checkins', async (req, res) => {
 
             // Broadcast the event to all connected clients
             io.emit('newCheckIn', checkIn);
+            io.emit('playAlertSound', checkIn._id); // Emit alert sound event to all clients
             res.json(checkIn);
         }
     } catch (err) {
