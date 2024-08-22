@@ -218,7 +218,11 @@ socket.on('clearTableAndDatabase', () => {
             if (!document.querySelector(`tr[data-id="${data._id}"]`)) {
                 socket.emit('newCheckIn', data); // Emit event to other clients
                 addTableRow(room, new Date(data.checkInTime), data._id);
-                socket.emit('playAlertSound', data._id); // Emit alert sound event to all clients
+    
+                // Set timer for 10 minutes to play alert sound
+                setTimeout(() => {
+                    socket.emit('playAlertSound', data._id); // Emit alert sound event to all clients
+                }, 600000); // 10 minutes in milliseconds
             }
         } catch (err) {
             console.error('Error adding check-in:', err);
