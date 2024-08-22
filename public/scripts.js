@@ -718,7 +718,7 @@ socket.on('clearTableAndDatabase', () => {
 
         // Set timer for remaining time until sound should play
         setTimeout(() => {
-            socket.emit('playAlertSound', data._id);// Play sound using Howler.js
+            alertSound.play(); // Play sound using Howler.js
         }, 600000); // 10 minutes in milliseconds
     });
 
